@@ -103,6 +103,7 @@ specifically to catch this.
 | `package.json` | the pins above |
 | `web-search/index.mjs` | the search server, one file, no dependencies |
 | `document-text/index.mjs` | the PDF/PPTX text server |
+| `warm-cache.mjs` | optional; pre-parses every document so the first search is instant |
 | `document-text/.cache.json` | extracted text, keyed by mtime; safe to delete |
 | `local-paths.json` | written by setup; where things landed on this machine |
 
