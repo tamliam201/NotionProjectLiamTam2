@@ -42,7 +42,7 @@ Then:
 | Flag | Effect |
 |---|---|
 | `--coursework <path>` | required; the filesystem server's one allowed root |
-| `--dry-run` | do everything except write the config |
+| `--dry-run` | everything except writing the config; still installs, since the servers have to start for their schemas to be checked |
 | `--skip-install` | reuse an existing `node_modules` |
 
 Setup backs up any existing config to `backups/` before merging, and touches

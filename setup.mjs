@@ -108,13 +108,21 @@ if (flag("skip-install")) {
   ok("skipping npm install (--skip-install)");
 } else {
   console.log("\nInstalling dependencies (this reproduces the pinned tree)...");
-  // npm.cmd directly rather than shell:true, which triggers DEP0190.
-  const npm = spawnSync(platform() === "win32" ? "npm.cmd" : "npm", ["install", "--no-audit", "--no-fund"], {
-    cwd: HERE,
-    stdio: "inherit",
-  });
-  if (npm.status !== 0) {
-    bad("npm install failed");
+  // Windows cannot CreateProcess a .cmd file, and npm is npm.cmd there, so it
+  // has to go through cmd.exe. Invoking cmd.exe explicitly rather than passing
+  // shell:true keeps Node from emitting DEP0190.
+  const isWin = platform() === "win32";
+  const npm = isWin
+    ? spawnSync(process.env.ComSpec || "cmd.exe",
+        ["/d", "/s", "/c", "npm install --no-audit --no-fund"],
+        { cwd: HERE, stdio: "inherit" })
+    : spawnSync("npm", ["install", "--no-audit", "--no-fund"],
+        { cwd: HERE, stdio: "inherit" });
+
+  if (npm.error || npm.status !== 0) {
+    bad(`npm install failed${npm.error ? `: ${npm.error.message}` : ` (exit ${npm.status})`}`);
+    info("Check that npm is on PATH — run 'npm --version' in this same terminal.");
+    info("If it is, re-run with the output above for the actual cause.");
     process.exit(1);
   }
 }
