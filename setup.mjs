@@ -98,10 +98,13 @@ ok(`coursework folder: ${coursework}`);
 // ---------------------------------------------------------- 3. install ----
 const FS_ENTRY = join(HERE, "node_modules", "@modelcontextprotocol", "server-filesystem", "dist", "index.js");
 const WS_ENTRY = join(HERE, "web-search", "index.mjs");
+const DT_ENTRY = join(HERE, "document-text", "index.mjs");
 
-if (!existsSync(WS_ENTRY)) {
-  bad(`missing ${WS_ENTRY} — copy the whole bundle folder, not just setup.mjs`);
-  process.exit(1);
+for (const entry of [WS_ENTRY, DT_ENTRY]) {
+  if (!existsSync(entry)) {
+    bad(`missing ${entry} — copy the whole bundle folder, not just setup.mjs`);
+    process.exit(1);
+  }
 }
 
 if (flag("skip-install")) {
@@ -204,6 +207,15 @@ console.log("\nStarting both servers before touching any config...");
   if (r.error) bad(`web-search server: ${r.error}`);
   else ok(`web-search server: ${r.tools.length} tools`);
 }
+{
+  const r = await probe(DT_ENTRY, [coursework]);
+  if (r.error) bad(`document-text server: ${r.error}`);
+  else {
+    const badInput = r.tools.filter((t) => t.inputSchema?.type !== "object" || !t.inputSchema?.properties);
+    if (badInput.length) bad(`document-text server advertises ${badInput.length}/${r.tools.length} malformed inputSchemas.`);
+    else ok(`document-text server: ${r.tools.length} tools`);
+  }
+}
 
 if (problems) {
   console.log(`\n${problems} problem(s). Config not touched.\n`);
@@ -221,6 +233,9 @@ const CONFIG_PATH =
 const entries = {
   "coursework-files": { command: process.execPath, args: [FS_ENTRY, coursework] },
   "web-search": { command: process.execPath, args: [WS_ENTRY] },
+  // Same allowed root as the filesystem server: this process reads from disk
+  // itself, so a wider scope here would quietly undo that server's scoping.
+  "document-text": { command: process.execPath, args: [DT_ENTRY, coursework] },
 };
 
 console.log(`\nConfig: ${CONFIG_PATH}`);
@@ -260,7 +275,7 @@ ok(`registered: ${Object.keys(entries).join(", ")}`);
 
 writeFileSync(
   join(HERE, "local-paths.json"),
-  JSON.stringify({ node: process.execPath, configPath: CONFIG_PATH, coursework, fsEntry: FS_ENTRY, wsEntry: WS_ENTRY }, null, 2) + "\n",
+  JSON.stringify({ node: process.execPath, configPath: CONFIG_PATH, coursework, fsEntry: FS_ENTRY, wsEntry: WS_ENTRY, dtEntry: DT_ENTRY }, null, 2) + "\n",
   "utf8"
 );
 ok("wrote local-paths.json");

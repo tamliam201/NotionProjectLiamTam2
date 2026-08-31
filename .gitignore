@@ -2,3 +2,6 @@
 node_modules/
 local-paths.json
 backups/
+
+# Extracted-text cache, keyed by file mtime — rebuilt on demand
+document-text/.cache.json

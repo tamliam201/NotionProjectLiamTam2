@@ -10,8 +10,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, extname, basename, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { platform } from "node:os";
 
@@ -70,12 +70,30 @@ async function open(command, args) {
 }
 const textOf = (r) => (r.result?.content || []).map((x) => x.text ?? "").join("\n");
 
+/** First file with the given extension under dir, as a root-relative path. */
+function findOne(dir, ext, root = dir) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+  for (const e of entries) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name.startsWith(".") || e.name === "node_modules") continue;
+      const hit = findOne(full, ext, root);
+      if (hit) return hit;
+    } else if (extname(e.name).toLowerCase() === ext) {
+      return relative(root, full);
+    }
+  }
+  return null;
+}
+
 console.log("\n[1] Registration");
 if (existsSync(paths.configPath)) {
   const names = Object.keys(JSON.parse(readFileSync(paths.configPath, "utf8")).mcpServers || {});
   check("config present", true, paths.configPath);
   check("coursework-files registered", names.includes("coursework-files"));
   check("web-search registered", names.includes("web-search"));
+  check("document-text registered", names.includes("document-text"));
 } else if (platform() === "win32") {
   warned("config absent — expected while Claude Desktop is closed",
     "On Windows the app deletes this file on exit and restores it on launch. Re-run with the app open to confirm registration.");
@@ -119,8 +137,44 @@ console.log("\n[3] Web-search server");
   s.child.kill();
 }
 
+console.log("\n[4] Document-text server");
+if (!paths.dtEntry) {
+  warned("document-text not in local-paths.json — re-run setup.mjs to register it");
+} else {
+  const s = await open(paths.node, [paths.dtEntry, paths.coursework]);
+  const tools = (await s.send("tools/list", {})).result.tools;
+  check(`handshake (${s.serverInfo?.name}, ${tools.length} tools)`, tools.length === 3);
+
+  const badInput = tools.filter((t) => t.inputSchema?.type !== "object" || !t.inputSchema?.properties);
+  check("inputSchema well-formed", badInput.length === 0,
+    badInput.length ? `${badInput.length}/${tools.length} malformed` : null);
+
+  // Assert on the extracted words, not just on a non-error reply: a broken
+  // parser returns an empty string perfectly successfully.
+  const pptx = findOne(paths.coursework, ".pptx");
+  if (pptx) {
+    const r = await s.send("tools/call", { name: "read_document", arguments: { path: pptx, max_chars: 4000 } });
+    const t = textOf(r);
+    check("extracts text from .pptx", !r.result?.isError && /--- Slide 1 ---/.test(t) && t.length > 300,
+      `${basename(pptx)} -> ${t.length} chars`);
+  } else warned("no .pptx under the coursework root to test against");
+
+  const pdf = findOne(paths.coursework, ".pdf");
+  if (pdf) {
+    const r = await s.send("tools/call", { name: "read_document", arguments: { path: pdf, max_chars: 4000 } });
+    const t = textOf(r);
+    check("extracts text from .pdf", !r.result?.isError && /--- Page 1 ---/.test(t) && t.length > 300,
+      `${basename(pdf)} -> ${t.length} chars`);
+  } else warned("no .pdf under the coursework root to test against");
+
+  const denied = await s.send("tools/call", { name: "read_document", arguments: { path: join("..", "definitely-not-allowed.pdf") } });
+  check("refuses paths outside the root", denied.result?.isError === true, textOf(denied).trim());
+
+  s.child.kill();
+}
+
 console.log(`\n${pass} passed, ${fail} failed${warn ? `, ${warn} warning${warn > 1 ? "s" : ""}` : ""}.\n`);
 if (fail) { console.log("Fix the FAIL lines above.\n"); process.exit(1); }
-console.log("Both servers healthy. Restart Claude Desktop if you have not since setup,");
+console.log("All three servers healthy. Restart Claude Desktop if you have not since setup,");
 console.log("then ask a new chat: \"What files do you have access to?\"\n");
 process.exit(0);

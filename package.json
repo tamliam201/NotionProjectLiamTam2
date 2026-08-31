@@ -2,9 +2,10 @@
   "name": "coursework-mcp-servers",
   "private": true,
   "version": "1.0.0",
-  "description": "Portable MCP server bundle: filesystem scoped to a coursework folder, plus a zero-dependency web search server.",
+  "description": "Portable MCP server bundle: filesystem scoped to a coursework folder, a zero-dependency web search server, and a PDF/PPTX text extractor.",
   "dependencies": {
-    "@modelcontextprotocol/server-filesystem": "2025.8.21"
+    "@modelcontextprotocol/server-filesystem": "2025.8.21",
+    "pdfjs-dist": "6.3.289"
   },
   "overrides": {
     "zod": "3.25.76"
